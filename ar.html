@@ -3,11 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ROA-AR Tes</title>
+  <title>ROA-AR</title>
+
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
   <style>
-    body { margin: 0; }
+    body { margin: 0; overflow: hidden; }
+    /* sembunyikan tombol VR supaya tidak salah ketuk */
+    .a-enter-vr { display: none !important; }
   </style>
 </head>
 <body>
@@ -21,10 +25,12 @@
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
     <a-entity mindar-image-target="targetIndex: 0">
-      <!-- panel transparan seukuran gambar (rasio 1000x700 = 1 : 0,7) -->
-      <a-plane color="#2196f3" opacity="0.4" width="1" height="0.7"></a-plane>
-      <!-- kotak merah yang melayang di atas gambar -->
-      <a-box position="0 0 0.15" scale="0.2 0.2 0.2" color="#e53935"></a-box>
+      <a-gltf-model
+        src="./assets/cat/Cat.gltf"
+        position="0 0 0"
+        rotation="90 0 0"
+        scale="0.3 0.3 0.3">
+      </a-gltf-model>
     </a-entity>
   </a-scene>
 </body>
