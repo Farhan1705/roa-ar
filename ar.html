@@ -14,7 +14,7 @@
   </style>
 
   <script>
-    // Menyembunyikan alas datar yang ikut tersimpan di model (tebakan otomatis)
+    // Menyembunyikan alas yang ikut tersimpan di model
     AFRAME.registerComponent('hide-base', {
       init: function () {
         this.el.addEventListener('model-loaded', () => {
@@ -24,14 +24,25 @@
           const total = new THREE.Box3().setFromObject(root);
           const ts = new THREE.Vector3();
           total.getSize(ts);
+
           root.traverse((o) => {
             if (!o.isMesh) return;
             const b = new THREE.Box3().setFromObject(o);
             const s = new THREE.Vector3();
             b.getSize(s);
-            // mesh yang sangat tipis tapi lebar = alas
-            if (s.y < ts.y * 0.1 && s.x > ts.x * 0.6 && s.z > ts.z * 0.6) {
+
+            // dicatat di Console (F12) untuk pengecekan
+            console.log('mesh:', o.name,
+              'lebar:', s.x.toFixed(2),
+              'tinggi:', s.y.toFixed(2),
+              'dalam:', s.z.toFixed(2));
+
+            // alas = bagian lebar yang berada di dasar model
+            const lebar = s.x > ts.x * 0.6 && s.z > ts.z * 0.6;
+            const dibawah = b.max.y < total.min.y + ts.y * 0.3;
+            if (lebar && dibawah) {
               o.visible = false;
+              console.log('disembunyikan:', o.name);
             }
           });
         });
@@ -53,7 +64,7 @@
       <a-gltf-model
         src="./assets/robocat.glb"
         hide-base
-        position="0 -0.2 0"
+        position="0 0.1 0"
         rotation="0 0 0"
         scale="0.3 0.3 0.3">
       </a-gltf-model>
