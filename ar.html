@@ -12,31 +12,91 @@
     body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }
     .a-enter-vr { display: none !important; }
 
+    /* Layar sambutan */
     #mulai {
       position: fixed; inset: 0; z-index: 10000;
       display: flex; align-items: center; justify-content: center;
       background: rgba(20, 20, 40, 0.92); padding: 24px;
     }
-    #mulai .kartu {
-      max-width: 340px; text-align: center; color: #fff;
-    }
+    #mulai .kartu { max-width: 340px; text-align: center; color: #fff; }
     #mulai h1 { margin: 0 0 12px; font-size: 28px; }
     #mulai p  { margin: 0 0 24px; line-height: 1.5; }
     #btnMulai {
       font-size: 18px; padding: 14px 40px; border: 0; border-radius: 999px;
       background: #ffb300; color: #222; font-weight: 700;
     }
+
+    /* Kartu informasi (atas layar) */
+    #info {
+      position: fixed; left: 12px; right: 12px; z-index: 9998;
+      top: calc(12px + env(safe-area-inset-top, 0px));
+      display: none;
+      background: rgba(255, 255, 255, 0.94); color: #222;
+      border-radius: 16px; padding: 14px 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    #info h2 { margin: 0 0 6px; font-size: 18px; color: #c62828; }
+    #info p  { margin: 0; font-size: 15px; line-height: 1.45; }
+    #nav {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 10px;
+    }
+    #nav button {
+      border: 0; border-radius: 999px; background: #eee;
+      width: 40px; height: 36px; font-size: 20px; font-weight: 700;
+    }
+    #hitung { font-size: 13px; color: #666; }
+    #langsung {
+      display: block; margin-top: 8px; font-size: 13px;
+      color: #1565c0; text-decoration: underline; text-align: center;
+    }
+
+    /* Tombol bantuan (bawah layar, muncul setelah narasi selesai) */
+    #aksi {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 9999;
+      display: none; flex-wrap: wrap; gap: 10px;
+      padding: 12px 12px 20px;
+      padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+      background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0));
+    }
+    #aksi a {
+      flex: 1 1 40%; text-align: center; text-decoration: none;
+      padding: 14px 8px; border-radius: 12px;
+      font-size: 16px; font-weight: 700;
+    }
+    #btnBantuan { flex-basis: 100% !important; background: #e53935; color: #fff; }
+    #btnLapor   { background: #1e88e5; color: #fff; }
+    #btnWeb     { background: #fff;    color: #222; }
   </style>
 </head>
 <body>
 
-  <!-- Layar sambutan: ketukan pertama membuka kunci audio di browser HP -->
+  <!-- Layar sambutan -->
   <div id="mulai">
     <div class="kartu">
       <h1>ROA-AR</h1>
       <p>Ketuk <b>Mulai</b>, lalu arahkan kamera ke poster atau kartu. Nyalakan suara HP-mu.</p>
       <button id="btnMulai">Mulai</button>
     </div>
+  </div>
+
+  <!-- Kartu informasi (muncul saat poster terdeteksi) -->
+  <div id="info">
+    <h2 id="judul"></h2>
+    <p id="isi"></p>
+    <div id="nav">
+      <button id="btnSebelum" aria-label="Sebelumnya">‹</button>
+      <span id="hitung"></span>
+      <button id="btnLanjut" aria-label="Berikutnya">›</button>
+    </div>
+    <a id="langsung" href="#">Butuh bantuan sekarang?</a>
+  </div>
+
+  <!-- Tombol bantuan (muncul setelah narasi selesai) -->
+  <div id="aksi">
+    <a id="btnBantuan" href="#" target="_blank" rel="noopener noreferrer">Hubungi Bantuan</a>
+    <a id="btnLapor"   href="#" target="_blank" rel="noopener noreferrer">Lapor Perdana</a>
+    <a id="btnWeb"     href="#" target="_blank" rel="noopener noreferrer">Web ROA</a>
   </div>
 
   <audio id="narasi" src="./assets/narasi.wav" preload="auto"></audio>
@@ -61,9 +121,77 @@
   </a-scene>
 
   <script>
-    const audio = document.getElementById('narasi');
+    // ====== ALAMAT TOMBOL ======
+    const LINK_BANTUAN = 'https://wa.me/6281145604320';
+    const LINK_LAPOR   = 'https://laporperdana.sultengprov.go.id/';
+    const LINK_WEB     = 'https://roa.sekolahkukeren.id/';
+
+    // ====== ISI KARTU (DRAF - mohon diperiksa guru BK / DP3A) ======
+    // Waktu ganti kartu dibagi rata sepanjang narasi.
+    // Kalau mau tepat, tambahkan detik mulai, misalnya:
+    //   { judul: '...', isi: '...', detik: 12 }
+    // (isi 'detik' untuk SEMUA kartu; kartu pertama pakai 0)
+    const KARTU = [
+      { judul: 'Halo, aku maskot ROA',
+        isi: 'Hari ini aku mau bercerita tentang perundungan dan kekerasan. Simak ya!' },
+      { judul: 'Apa itu perundungan?',
+        isi: 'Perilaku menyakiti orang lain berulang kali lewat kata-kata, tindakan, atau di dunia maya. Contoh: mengejek, mengucilkan teman, menyebar kabar buruk.' },
+      { judul: 'Kekerasan bukan hanya memukul',
+        isi: 'Kata-kata kasar, ancaman, dan sentuhan yang membuatmu tidak nyaman juga termasuk kekerasan.' },
+      { judul: 'Kalau kamu mengalaminya',
+        isi: 'Itu bukan salahmu. Ceritakan kepada guru, orang tua, atau orang yang kamu percaya.' },
+      { judul: 'Kalau kamu melihatnya',
+        isi: 'Jangan ikut menertawakan. Temani temanmu, lalu laporkan.' },
+      { judul: 'Kamu berhak aman',
+        isi: 'Setiap anak berhak merasa aman. Kamu bisa meminta bantuan lewat tombol di bawah.' }
+    ];
+    // =================================================================
+
+    document.getElementById('btnBantuan').href = LINK_BANTUAN;
+    document.getElementById('btnLapor').href   = LINK_LAPOR;
+    document.getElementById('btnWeb').href     = LINK_WEB;
+
+    const audio  = document.getElementById('narasi');
     const target = document.getElementById('target');
+    const info   = document.getElementById('info');
+    const aksi   = document.getElementById('aksi');
     let siap = false;
+    let idx = -1;
+    let manual = false; // true kalau pengguna menggeser kartu sendiri
+
+    function tampilkanKartu(i) {
+      idx = i;
+      document.getElementById('judul').textContent = KARTU[i].judul;
+      document.getElementById('isi').textContent   = KARTU[i].isi;
+      document.getElementById('hitung').textContent = (i + 1) + ' / ' + KARTU.length;
+    }
+
+    // Hitung kartu mana yang sesuai dengan detik narasi
+    function kartuUntukWaktu(t) {
+      const n = KARTU.length;
+      const adaWaktu = KARTU.every(k => typeof k.detik === 'number');
+      if (adaWaktu) {
+        let hasil = 0;
+        for (let i = 0; i < n; i++) if (t >= KARTU[i].detik) hasil = i;
+        return hasil;
+      }
+      const dur = audio.duration;
+      if (!dur || !isFinite(dur)) return 0;
+      return Math.min(n - 1, Math.floor(t / (dur / n)));
+    }
+
+    function geser(arah) {
+      manual = true;
+      tampilkanKartu((idx + arah + KARTU.length) % KARTU.length);
+    }
+    document.getElementById('btnSebelum').addEventListener('click', () => geser(-1));
+    document.getElementById('btnLanjut').addEventListener('click',  () => geser(1));
+
+    function tampilkanBantuan() { aksi.style.display = 'flex'; }
+    document.getElementById('langsung').addEventListener('click', (e) => {
+      e.preventDefault();
+      tampilkanBantuan();
+    });
 
     // Ketukan "Mulai" membuka kunci audio
     document.getElementById('btnMulai').addEventListener('click', () => {
@@ -73,15 +201,32 @@
       document.getElementById('mulai').style.display = 'none';
     });
 
-    // Poster terdeteksi: putar narasi dari awal
+    // Kartu berganti mengikuti narasi
+    audio.addEventListener('timeupdate', () => {
+      if (manual) return;
+      const i = kartuUntukWaktu(audio.currentTime);
+      if (i !== idx) tampilkanKartu(i);
+    });
+
+    // Narasi selesai: tampilkan tombol bantuan (dan tetap tampil)
+    audio.addEventListener('ended', () => {
+      tampilkanKartu(KARTU.length - 1);
+      tampilkanBantuan();
+    });
+
+    // Poster terdeteksi: mulai dari awal
     target.addEventListener('targetFound', () => {
+      manual = false;
+      tampilkanKartu(0);
+      info.style.display = 'block';
       if (!siap) return;
       audio.currentTime = 0;
       audio.play().catch((e) => console.warn('Gagal memutar:', e));
     });
 
-    // Poster hilang: hentikan narasi
+    // Poster hilang: hentikan narasi, sembunyikan kartu (tombol bantuan tidak disembunyikan)
     target.addEventListener('targetLost', () => {
+      info.style.display = 'none';
       audio.pause();
       audio.currentTime = 0;
     });
