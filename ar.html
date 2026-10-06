@@ -9,48 +9,38 @@
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }
     .a-enter-vr { display: none !important; }
+
+    #mulai {
+      position: fixed; inset: 0; z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(20, 20, 40, 0.92); padding: 24px;
+    }
+    #mulai .kartu {
+      max-width: 340px; text-align: center; color: #fff;
+    }
+    #mulai h1 { margin: 0 0 12px; font-size: 28px; }
+    #mulai p  { margin: 0 0 24px; line-height: 1.5; }
+    #btnMulai {
+      font-size: 18px; padding: 14px 40px; border: 0; border-radius: 999px;
+      background: #ffb300; color: #222; font-weight: 700;
+    }
   </style>
-
-  <script>
-    // Menyembunyikan alas yang ikut tersimpan di model
-    AFRAME.registerComponent('hide-base', {
-      init: function () {
-        this.el.addEventListener('model-loaded', () => {
-          const root = this.el.getObject3D('mesh');
-          if (!root) return;
-          root.updateWorldMatrix(true, true);
-          const total = new THREE.Box3().setFromObject(root);
-          const ts = new THREE.Vector3();
-          total.getSize(ts);
-
-          root.traverse((o) => {
-            if (!o.isMesh) return;
-            const b = new THREE.Box3().setFromObject(o);
-            const s = new THREE.Vector3();
-            b.getSize(s);
-
-            // dicatat di Console (F12) untuk pengecekan
-            console.log('mesh:', o.name,
-              'lebar:', s.x.toFixed(2),
-              'tinggi:', s.y.toFixed(2),
-              'dalam:', s.z.toFixed(2));
-
-            // alas = bagian lebar yang berada di dasar model
-            const lebar = s.x > ts.x * 0.6 && s.z > ts.z * 0.6;
-            const dibawah = b.max.y < total.min.y + ts.y * 0.3;
-            if (lebar && dibawah) {
-              o.visible = false;
-              console.log('disembunyikan:', o.name);
-            }
-          });
-        });
-      }
-    });
-  </script>
 </head>
 <body>
+
+  <!-- Layar sambutan: ketukan pertama membuka kunci audio di browser HP -->
+  <div id="mulai">
+    <div class="kartu">
+      <h1>ROA-AR</h1>
+      <p>Ketuk <b>Mulai</b>, lalu arahkan kamera ke poster atau kartu. Nyalakan suara HP-mu.</p>
+      <button id="btnMulai">Mulai</button>
+    </div>
+  </div>
+
+  <audio id="narasi" src="./assets/narasi.wav" preload="auto"></audio>
+
   <a-scene
     mindar-image="imageTargetSrc: ./assets/targets.mind;"
     color-space="sRGB"
@@ -60,15 +50,41 @@
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <a-entity mindar-image-target="targetIndex: 0">
+    <a-entity id="target" mindar-image-target="targetIndex: 0">
       <a-gltf-model
         src="./assets/robocat.glb"
-        hide-base
         position="0 0.1 0"
         rotation="0 0 0"
         scale="0.3 0.3 0.3">
       </a-gltf-model>
     </a-entity>
   </a-scene>
+
+  <script>
+    const audio = document.getElementById('narasi');
+    const target = document.getElementById('target');
+    let siap = false;
+
+    // Ketukan "Mulai" membuka kunci audio
+    document.getElementById('btnMulai').addEventListener('click', () => {
+      audio.play()
+        .then(() => { audio.pause(); audio.currentTime = 0; siap = true; })
+        .catch((e) => console.warn('Audio belum bisa dibuka:', e));
+      document.getElementById('mulai').style.display = 'none';
+    });
+
+    // Poster terdeteksi: putar narasi dari awal
+    target.addEventListener('targetFound', () => {
+      if (!siap) return;
+      audio.currentTime = 0;
+      audio.play().catch((e) => console.warn('Gagal memutar:', e));
+    });
+
+    // Poster hilang: hentikan narasi
+    target.addEventListener('targetLost', () => {
+      audio.pause();
+      audio.currentTime = 0;
+    });
+  </script>
 </body>
 </html>
