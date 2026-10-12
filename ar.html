@@ -23,7 +23,7 @@
     #mulai p  { margin: 0 0 24px; line-height: 1.5; }
     #btnMulai {
       font-size: 18px; padding: 14px 40px; border: 0; border-radius: 999px;
-      background: #ffb300; color: #222; font-weight: 700;
+      background: #f26b3a; color: #fff; font-weight: 700;
     }
 
     /* Tombol kecil "Butuh bantuan sekarang?" (selama narasi) */
@@ -54,6 +54,145 @@
     #btnLapor   { background: #1e88e5; color: #fff; }
     #btnWeb     { background: #fff;    color: #222; }
   </style>
+
+  <script>
+    // Komponen kartu 3D: menggambar kartu bergaya web ROA ke canvas lalu menempelkannya sebagai tekstur
+    AFRAME.registerComponent('kartu-roa', {
+      init: function () {
+        this.W = 800; this.H = 1170;
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = this.W; this.canvas.height = this.H;
+        this.ctx = this.canvas.getContext('2d');
+
+        this.tex = new THREE.CanvasTexture(this.canvas);
+        this.tex.colorSpace = THREE.SRGBColorSpace;
+        this.tex.generateMipmaps = false;
+        this.tex.minFilter = THREE.LinearFilter;
+
+        const lebar = 0.47; // lebar kartu (poster = 1)
+        const geo = new THREE.PlaneGeometry(lebar, lebar * this.H / this.W);
+        const mat = new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, toneMapped: false });
+        this.el.setObject3D('mesh', new THREE.Mesh(geo, mat));
+
+        this.img = {};
+        this.terakhir = null;
+      },
+
+      tampil: function (item, i, n) {
+        this.terakhir = item;
+        this.lukis(item, i, n);
+        if (item.gambar && !(item.gambar in this.img)) {
+          this.img[item.gambar] = null;
+          const im = new Image();
+          im.onload = () => {
+            this.img[item.gambar] = im;
+            if (this.terakhir === item) this.lukis(item, i, n);
+          };
+          im.onerror = () => console.warn('Gambar tidak ditemukan:', item.gambar);
+          im.src = item.gambar;
+        }
+      },
+
+      rr: function (c, x, y, w, h, r) {
+        c.beginPath();
+        c.moveTo(x + r, y);
+        c.arcTo(x + w, y, x + w, y + h, r);
+        c.arcTo(x + w, y + h, x, y + h, r);
+        c.arcTo(x, y + h, x, y, r);
+        c.arcTo(x, y, x + w, y, r);
+        c.closePath();
+      },
+
+      bungkus: function (c, teks, lebar) {
+        const kata = teks.split(' ');
+        const baris = [];
+        let b = '';
+        for (const k of kata) {
+          const coba = b ? b + ' ' + k : k;
+          if (c.measureText(coba).width > lebar && b) { baris.push(b); b = k; }
+          else b = coba;
+        }
+        if (b) baris.push(b);
+        return baris;
+      },
+
+      lukis: function (item, i, n) {
+        const c = this.ctx, W = this.W, H = this.H;
+        const ORANYE = '#f26b3a';
+        const FONT = 'system-ui, "Segoe UI", Roboto, Arial, sans-serif';
+        c.clearRect(0, 0, W, H);
+
+        // Judul atas
+        c.fillStyle = ORANYE;
+        this.rr(c, 40, 0, 720, 80, 40); c.fill();
+        c.fillStyle = '#fff'; c.font = 'bold 30px ' + FONT;
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText('Jika kamu mengalami hal-hal berikut:', W / 2, 42);
+
+        // Kartu putih
+        const y0 = 110;
+        c.save();
+        c.shadowColor = 'rgba(0,0,0,0.3)'; c.shadowBlur = 28; c.shadowOffsetY = 8;
+        c.fillStyle = '#fff';
+        this.rr(c, 24, y0, 752, 980, 56); c.fill();
+        c.restore();
+
+        // Area ilustrasi
+        const ix = 68, iy = y0 + 36, iw = 664, ih = 340;
+        const g = c.createRadialGradient(W / 2, iy + ih / 2, 10, W / 2, iy + ih / 2, iw / 2);
+        g.addColorStop(0, 'rgba(200,220,234,0.95)');
+        g.addColorStop(1, 'rgba(200,220,234,0)');
+        c.fillStyle = g; c.fillRect(ix, iy, iw, ih);
+        const im = this.img[item.gambar];
+        if (im) {
+          const s = Math.min(iw / im.width, ih / im.height) * 0.95;
+          const w = im.width * s, h = im.height * s;
+          c.drawImage(im, W / 2 - w / 2, iy + ih / 2 - h / 2, w, h);
+        }
+
+        // Judul kartu + tombol bulat
+        c.fillStyle = '#1a1a1a'; c.font = 'bold 48px ' + FONT;
+        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        c.fillText(item.judul, 68, iy + ih + 72);
+        const cx = 732 - 34, cy = iy + ih + 56;
+        c.fillStyle = ORANYE; c.beginPath(); c.arc(cx, cy, 34, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = '#fff'; c.lineWidth = 6; c.lineCap = 'round'; c.lineJoin = 'round';
+        c.beginPath(); c.moveTo(cx - 12, cy + 5); c.lineTo(cx, cy - 7); c.lineTo(cx + 12, cy + 5); c.stroke();
+
+        // Garis pemisah
+        const gy = iy + ih + 100;
+        c.strokeStyle = '#c9d6df'; c.lineWidth = 3;
+        c.beginPath(); c.moveTo(68, gy); c.lineTo(732, gy); c.stroke();
+
+        // Teks isi (ukuran huruf menyesuaikan panjang teks)
+        const by = gy + 52, tersedia = (y0 + 980 - 44) - by;
+        let fs = 36, baris, lh;
+        for (;;) {
+          c.font = fs + 'px ' + FONT;
+          baris = this.bungkus(c, item.isi, 664);
+          lh = fs * 1.5;
+          if (baris.length * lh <= tersedia || fs <= 22) break;
+          fs -= 2;
+        }
+        c.fillStyle = '#222';
+        baris.forEach((b, k) => c.fillText(b, 68, by + fs + k * lh));
+
+        // Titik penanda halaman
+        const dy = 1138, gap = 14;
+        let total = (n - 1) * 20 + 50 + (n - 1) * gap;
+        let x = W / 2 - total / 2;
+        for (let k = 0; k < n; k++) {
+          const lebar = (k === i) ? 50 : 20;
+          c.fillStyle = (k === i) ? ORANYE : '#fff';
+          c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 2;
+          this.rr(c, x, dy - 10, lebar, 20, 10); c.fill(); c.stroke();
+          x += lebar + gap;
+        }
+
+        this.tex.needsUpdate = true;
+      }
+    });
+  </script>
 </head>
 <body>
 
@@ -87,41 +226,23 @@
 
     <a-entity id="target" mindar-image-target="targetIndex: 0">
 
-      <!-- Karakter -->
+      <!-- Karakter (kiri) -->
       <a-gltf-model
         src="./assets/robocat.glb"
-        position="0 -0.1 0"
+        position="-0.26 -0.12 0"
         rotation="0 0 0"
         scale="0.3 0.3 0.3">
       </a-gltf-model>
 
-      <!-- Kartu 3D: melayang di atas karakter -->
-      <a-entity id="kartu" position="0 0.27 0.1" rotation="-8 0 0"
+      <!-- Kartu 3D (kanan) -->
+      <a-entity id="kartu" position="0.24 0 0.05"
         animation__pop="property: scale; from: 0.85 0.85 0.85; to: 1 1 1; dur: 300; easing: easeOutBack; startEvents: pop">
-
         <a-entity
-          animation="property: position; from: 0 0 0; to: 0 0.012 0; dir: alternate; dur: 1800; easing: easeInOutSine; loop: true">
-
-          <!-- bingkai merah -->
-          <a-plane width="0.94" height="0.34" position="0 0 0"
-            material="shader: flat; color: #c62828"></a-plane>
-          <!-- badan kartu -->
-          <a-plane width="0.9" height="0.30" position="0 0 0.003"
-            material="shader: flat; color: #ffffff"></a-plane>
-
-          <a-text id="judul" value="" align="center" anchor="center" baseline="center"
-            color="#c62828" width="0.84" wrap-count="30"
-            position="0 0.105 0.008"></a-text>
-
-          <a-text id="isi" value="" align="center" anchor="center" baseline="center"
-            color="#222222" width="0.82" wrap-count="34"
-            position="0 -0.02 0.008"></a-text>
-
-          <a-text id="hitung" value="" align="right" anchor="right" baseline="center"
-            color="#777777" width="0.3" wrap-count="12"
-            position="0.43 -0.13 0.008"></a-text>
+          animation="property: position; from: 0 0 0; to: 0 0.01 0; dir: alternate; dur: 1800; easing: easeInOutSine; loop: true">
+          <a-entity id="kartuBadan" kartu-roa></a-entity>
         </a-entity>
       </a-entity>
+
     </a-entity>
   </a-scene>
 
@@ -131,47 +252,50 @@
     const LINK_LAPOR   = 'https://laporperdana.sultengprov.go.id/';
     const LINK_WEB     = 'https://roa.sekolahkukeren.id/';
 
-    // ====== ISI KARTU (DRAF - mohon diperiksa guru BK / DP3A) ======
+    // ====== ISI KARTU (sama dengan web ROA) ======
     // Waktu ganti kartu dibagi rata sepanjang narasi. Untuk waktu tepat,
-    // tambahkan 'detik' di SEMUA kartu (kartu pertama 0), misalnya: detik: 12
+    // tambahkan 'detik' di SEMUA kartu (kartu pertama 0), misalnya: detik: 14
     const KARTU = [
-      { judul: 'Halo, aku maskot ROA',
-        isi: 'Aku mau bercerita tentang perundungan dan kekerasan. Simak ya!' },
-      { judul: 'Apa itu perundungan?',
-        isi: 'Menyakiti orang lain berulang kali: mengejek, mengucilkan, atau menyebar kabar buruk.' },
-      { judul: 'Kekerasan bukan hanya memukul',
-        isi: 'Kata kasar, ancaman, dan sentuhan yang membuatmu tidak nyaman juga kekerasan.' },
-      { judul: 'Kalau kamu mengalaminya',
-        isi: 'Itu bukan salahmu. Ceritakan kepada guru, orang tua, atau orang yang kamu percaya.' },
-      { judul: 'Kalau kamu melihatnya',
-        isi: 'Jangan ikut menertawakan. Temani temanmu, lalu laporkan.' },
-      { judul: 'Kamu berhak aman',
-        isi: 'Setiap anak berhak merasa aman. Minta bantuan lewat tombol di bawah.' }
+      { judul: 'Perundungan',
+        gambar: './assets/cards/perundungan.jpg',
+        isi: 'Fotonya dijadikan meme tanpa izin, digosipkan di grup obrolan, atau sengaja dijauhi? Bullying terjadi saat seseorang menyalahgunakan kekuatannya. Ketahuilah ini bukan salahmu dan kamu berhak mendapat bantuan.' },
+      { judul: 'Kekerasan Fisik',
+        gambar: './assets/cards/kekerasan-fisik.png',
+        isi: 'Didorong, dijegal, atau barang disembunyikan dengan alasan "hanya bercanda"? Rasa sakit tidak perlu menunggu luka memar untuk membuktikan itu salah. Bercanda seharusnya membuat semua orang tertawa.' },
+      { judul: 'Kekerasan Psikis',
+        gambar: './assets/cards/kekerasan-psikis.png',
+        isi: 'Sering diejek, dipanggil dengan nama yang merendahkan, atau dikucilkan? Tidak ada luka luar, tetapi jika hal ini membuat takut datang ke sekolah, mental sedang diserang. Perasaanmu sangat valid.' },
+      { judul: 'Kekerasan Seksual',
+        gambar: './assets/cards/kekerasan-seksual.png',
+        isi: 'Disiuli saat lewat, mendengar lelucon jorok, atau disentuh tanpa izin? Tindakan yang membuat risih dan tidak nyaman secara seksual adalah pelanggaran batasan. Tubuh setiap anak wajib dihormati dan dilindungi.' },
+      { judul: 'Diskriminasi',
+        gambar: './assets/cards/diskriminasi.png',
+        isi: 'Diberi perlakuan berbeda atau diejek hanya karena suku, agama, kondisi fisik? Perbedaan adalah keanekaragaman, bukan alasan untuk memojokkan. Setiap anak berhak belajar dalam lingkungan inklusif.' }
     ];
-    // =================================================================
+    // ============================================
 
     document.getElementById('btnBantuan').href = LINK_BANTUAN;
     document.getElementById('btnLapor').href   = LINK_LAPOR;
     document.getElementById('btnWeb').href     = LINK_WEB;
 
+    // Muat gambar lebih awal supaya tidak tersendat
+    KARTU.forEach(k => { const im = new Image(); im.src = k.gambar; });
+
     const audio  = document.getElementById('narasi');
     const target = document.getElementById('target');
     const kartu  = document.getElementById('kartu');
+    const badan  = document.getElementById('kartuBadan');
     const aksi   = document.getElementById('aksi');
     const cepat  = document.getElementById('btnCepat');
     let siap = false;
     let idx = -1;
 
-    function setTeks(id, nilai) {
-      document.getElementById(id).setAttribute('text', 'value', nilai);
-    }
-
     function tampilkanKartu(i) {
       if (i === idx) return;
+      const komp = badan.components['kartu-roa'];
+      if (!komp) return;
       idx = i;
-      setTeks('judul', KARTU[i].judul);
-      setTeks('isi', KARTU[i].isi);
-      setTeks('hitung', (i + 1) + ' / ' + KARTU.length);
+      komp.tampil(KARTU[i], i, KARTU.length);
       kartu.emit('pop');
     }
 
@@ -223,7 +347,7 @@
       audio.play().catch((e) => console.warn('Gagal memutar:', e));
     });
 
-    // Poster hilang: hentikan narasi (kartu 3D ikut hilang bersama target)
+    // Poster hilang: hentikan narasi (kartu 3D dan robot ikut hilang bersama target)
     target.addEventListener('targetLost', () => {
       audio.pause();
       audio.currentTime = 0;
