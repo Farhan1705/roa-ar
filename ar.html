@@ -26,32 +26,18 @@
       background: #ffb300; color: #222; font-weight: 700;
     }
 
-    /* Kartu informasi (atas layar) */
-    #info {
-      position: fixed; left: 12px; right: 12px; z-index: 9998;
-      top: calc(12px + env(safe-area-inset-top, 0px));
-      display: none;
-      background: rgba(255, 255, 255, 0.94); color: #222;
-      border-radius: 16px; padding: 14px 16px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-    }
-    #info h2 { margin: 0 0 6px; font-size: 18px; color: #c62828; }
-    #info p  { margin: 0; font-size: 15px; line-height: 1.45; }
-    #nav {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-top: 10px;
-    }
-    #nav button {
-      border: 0; border-radius: 999px; background: #eee;
-      width: 40px; height: 36px; font-size: 20px; font-weight: 700;
-    }
-    #hitung { font-size: 13px; color: #666; }
-    #langsung {
-      display: block; margin-top: 8px; font-size: 13px;
-      color: #1565c0; text-decoration: underline; text-align: center;
+    /* Tombol kecil "Butuh bantuan sekarang?" (selama narasi) */
+    #btnCepat {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      z-index: 9999; display: none;
+      border: 0; border-radius: 999px; padding: 10px 18px;
+      background: rgba(255,255,255,0.92); color: #c62828;
+      font-size: 14px; font-weight: 700;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
     }
 
-    /* Tombol bantuan (bawah layar, muncul setelah narasi selesai) */
+    /* Tombol bantuan (muncul setelah narasi selesai) */
     #aksi {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 9999;
       display: none; flex-wrap: wrap; gap: 10px;
@@ -80,19 +66,8 @@
     </div>
   </div>
 
-  <!-- Kartu informasi (muncul saat poster terdeteksi) -->
-  <div id="info">
-    <h2 id="judul"></h2>
-    <p id="isi"></p>
-    <div id="nav">
-      <button id="btnSebelum" aria-label="Sebelumnya">‹</button>
-      <span id="hitung"></span>
-      <button id="btnLanjut" aria-label="Berikutnya">›</button>
-    </div>
-    <a id="langsung" href="#">Butuh bantuan sekarang?</a>
-  </div>
+  <button id="btnCepat">Butuh bantuan sekarang?</button>
 
-  <!-- Tombol bantuan (muncul setelah narasi selesai) -->
   <div id="aksi">
     <a id="btnBantuan" href="#" target="_blank" rel="noopener noreferrer">Hubungi Bantuan</a>
     <a id="btnLapor"   href="#" target="_blank" rel="noopener noreferrer">Lapor Perdana</a>
@@ -111,12 +86,42 @@
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
     <a-entity id="target" mindar-image-target="targetIndex: 0">
+
+      <!-- Karakter -->
       <a-gltf-model
         src="./assets/robocat.glb"
-        position="0 0.1 0"
+        position="0 -0.1 0"
         rotation="0 0 0"
         scale="0.3 0.3 0.3">
       </a-gltf-model>
+
+      <!-- Kartu 3D: melayang di atas karakter -->
+      <a-entity id="kartu" position="0 0.27 0.1" rotation="-8 0 0"
+        animation__pop="property: scale; from: 0.85 0.85 0.85; to: 1 1 1; dur: 300; easing: easeOutBack; startEvents: pop">
+
+        <a-entity
+          animation="property: position; from: 0 0 0; to: 0 0.012 0; dir: alternate; dur: 1800; easing: easeInOutSine; loop: true">
+
+          <!-- bingkai merah -->
+          <a-plane width="0.94" height="0.34" position="0 0 0"
+            material="shader: flat; color: #c62828"></a-plane>
+          <!-- badan kartu -->
+          <a-plane width="0.9" height="0.30" position="0 0 0.003"
+            material="shader: flat; color: #ffffff"></a-plane>
+
+          <a-text id="judul" value="" align="center" anchor="center" baseline="center"
+            color="#c62828" width="0.84" wrap-count="30"
+            position="0 0.105 0.008"></a-text>
+
+          <a-text id="isi" value="" align="center" anchor="center" baseline="center"
+            color="#222222" width="0.82" wrap-count="34"
+            position="0 -0.02 0.008"></a-text>
+
+          <a-text id="hitung" value="" align="right" anchor="right" baseline="center"
+            color="#777777" width="0.3" wrap-count="12"
+            position="0.43 -0.13 0.008"></a-text>
+        </a-entity>
+      </a-entity>
     </a-entity>
   </a-scene>
 
@@ -127,23 +132,21 @@
     const LINK_WEB     = 'https://roa.sekolahkukeren.id/';
 
     // ====== ISI KARTU (DRAF - mohon diperiksa guru BK / DP3A) ======
-    // Waktu ganti kartu dibagi rata sepanjang narasi.
-    // Kalau mau tepat, tambahkan detik mulai, misalnya:
-    //   { judul: '...', isi: '...', detik: 12 }
-    // (isi 'detik' untuk SEMUA kartu; kartu pertama pakai 0)
+    // Waktu ganti kartu dibagi rata sepanjang narasi. Untuk waktu tepat,
+    // tambahkan 'detik' di SEMUA kartu (kartu pertama 0), misalnya: detik: 12
     const KARTU = [
       { judul: 'Halo, aku maskot ROA',
-        isi: 'Hari ini aku mau bercerita tentang perundungan dan kekerasan. Simak ya!' },
+        isi: 'Aku mau bercerita tentang perundungan dan kekerasan. Simak ya!' },
       { judul: 'Apa itu perundungan?',
-        isi: 'Perilaku menyakiti orang lain berulang kali lewat kata-kata, tindakan, atau di dunia maya. Contoh: mengejek, mengucilkan teman, menyebar kabar buruk.' },
+        isi: 'Menyakiti orang lain berulang kali: mengejek, mengucilkan, atau menyebar kabar buruk.' },
       { judul: 'Kekerasan bukan hanya memukul',
-        isi: 'Kata-kata kasar, ancaman, dan sentuhan yang membuatmu tidak nyaman juga termasuk kekerasan.' },
+        isi: 'Kata kasar, ancaman, dan sentuhan yang membuatmu tidak nyaman juga kekerasan.' },
       { judul: 'Kalau kamu mengalaminya',
         isi: 'Itu bukan salahmu. Ceritakan kepada guru, orang tua, atau orang yang kamu percaya.' },
       { judul: 'Kalau kamu melihatnya',
         isi: 'Jangan ikut menertawakan. Temani temanmu, lalu laporkan.' },
       { judul: 'Kamu berhak aman',
-        isi: 'Setiap anak berhak merasa aman. Kamu bisa meminta bantuan lewat tombol di bawah.' }
+        isi: 'Setiap anak berhak merasa aman. Minta bantuan lewat tombol di bawah.' }
     ];
     // =================================================================
 
@@ -153,24 +156,29 @@
 
     const audio  = document.getElementById('narasi');
     const target = document.getElementById('target');
-    const info   = document.getElementById('info');
+    const kartu  = document.getElementById('kartu');
     const aksi   = document.getElementById('aksi');
+    const cepat  = document.getElementById('btnCepat');
     let siap = false;
     let idx = -1;
-    let manual = false; // true kalau pengguna menggeser kartu sendiri
 
-    function tampilkanKartu(i) {
-      idx = i;
-      document.getElementById('judul').textContent = KARTU[i].judul;
-      document.getElementById('isi').textContent   = KARTU[i].isi;
-      document.getElementById('hitung').textContent = (i + 1) + ' / ' + KARTU.length;
+    function setTeks(id, nilai) {
+      document.getElementById(id).setAttribute('text', 'value', nilai);
     }
 
-    // Hitung kartu mana yang sesuai dengan detik narasi
+    function tampilkanKartu(i) {
+      if (i === idx) return;
+      idx = i;
+      setTeks('judul', KARTU[i].judul);
+      setTeks('isi', KARTU[i].isi);
+      setTeks('hitung', (i + 1) + ' / ' + KARTU.length);
+      kartu.emit('pop');
+    }
+
+    // Kartu mana yang sesuai dengan detik narasi
     function kartuUntukWaktu(t) {
       const n = KARTU.length;
-      const adaWaktu = KARTU.every(k => typeof k.detik === 'number');
-      if (adaWaktu) {
+      if (KARTU.every(k => typeof k.detik === 'number')) {
         let hasil = 0;
         for (let i = 0; i < n; i++) if (t >= KARTU[i].detik) hasil = i;
         return hasil;
@@ -180,18 +188,11 @@
       return Math.min(n - 1, Math.floor(t / (dur / n)));
     }
 
-    function geser(arah) {
-      manual = true;
-      tampilkanKartu((idx + arah + KARTU.length) % KARTU.length);
+    function tampilkanBantuan() {
+      aksi.style.display = 'flex';
+      cepat.style.display = 'none';
     }
-    document.getElementById('btnSebelum').addEventListener('click', () => geser(-1));
-    document.getElementById('btnLanjut').addEventListener('click',  () => geser(1));
-
-    function tampilkanBantuan() { aksi.style.display = 'flex'; }
-    document.getElementById('langsung').addEventListener('click', (e) => {
-      e.preventDefault();
-      tampilkanBantuan();
-    });
+    cepat.addEventListener('click', tampilkanBantuan);
 
     // Ketukan "Mulai" membuka kunci audio
     document.getElementById('btnMulai').addEventListener('click', () => {
@@ -199,16 +200,15 @@
         .then(() => { audio.pause(); audio.currentTime = 0; siap = true; })
         .catch((e) => console.warn('Audio belum bisa dibuka:', e));
       document.getElementById('mulai').style.display = 'none';
+      cepat.style.display = 'block';
     });
 
     // Kartu berganti mengikuti narasi
     audio.addEventListener('timeupdate', () => {
-      if (manual) return;
-      const i = kartuUntukWaktu(audio.currentTime);
-      if (i !== idx) tampilkanKartu(i);
+      tampilkanKartu(kartuUntukWaktu(audio.currentTime));
     });
 
-    // Narasi selesai: tampilkan tombol bantuan (dan tetap tampil)
+    // Narasi selesai: kartu terakhir + tombol bantuan (tetap tampil)
     audio.addEventListener('ended', () => {
       tampilkanKartu(KARTU.length - 1);
       tampilkanBantuan();
@@ -216,17 +216,15 @@
 
     // Poster terdeteksi: mulai dari awal
     target.addEventListener('targetFound', () => {
-      manual = false;
+      idx = -1;
       tampilkanKartu(0);
-      info.style.display = 'block';
       if (!siap) return;
       audio.currentTime = 0;
       audio.play().catch((e) => console.warn('Gagal memutar:', e));
     });
 
-    // Poster hilang: hentikan narasi, sembunyikan kartu (tombol bantuan tidak disembunyikan)
+    // Poster hilang: hentikan narasi (kartu 3D ikut hilang bersama target)
     target.addEventListener('targetLost', () => {
-      info.style.display = 'none';
       audio.pause();
       audio.currentTime = 0;
     });
