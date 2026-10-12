@@ -69,7 +69,7 @@
         this.tex.generateMipmaps = false;
         this.tex.minFilter = THREE.LinearFilter;
 
-        const lebar = 0.47; // lebar kartu (poster = 1)
+        const lebar = 0.47; // ukuran dasar; diperbesar lewat scale pembungkus
         const geo = new THREE.PlaneGeometry(lebar, lebar * this.H / this.W);
         const mat = new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, toneMapped: false });
         this.el.setObject3D('mesh', new THREE.Mesh(geo, mat));
@@ -226,27 +226,42 @@
 
     <a-entity id="target" mindar-image-target="targetIndex: 0">
 
-      <!-- Karakter (kiri) -->
-      <a-gltf-model
-        src="./assets/robocat.glb"
-        position="-0.26 -0.12 0"
-        rotation="0 0 0"
-        scale="0.3 0.3 0.3">
-      </a-gltf-model>
+      <!-- Pembungkus: diputar 90 derajat pada mode 'datar' supaya objek berdiri tegak dari kartu -->
+      <a-entity id="konten">
 
-      <!-- Kartu 3D (kanan) -->
-      <a-entity id="kartu" position="0.24 0 0.05"
-        animation__pop="property: scale; from: 0.85 0.85 0.85; to: 1 1 1; dur: 300; easing: easeOutBack; startEvents: pop">
-        <a-entity
-          animation="property: position; from: 0 0 0; to: 0 0.01 0; dir: alternate; dur: 1800; easing: easeInOutSine; loop: true">
-          <a-entity id="kartuBadan" kartu-roa></a-entity>
+        <!-- Karakter -->
+        <a-gltf-model id="robot" src="./assets/robocat.glb"></a-gltf-model>
+
+        <!-- Posisi dan ukuran kartu info -->
+        <a-entity id="kartuPos">
+          <a-entity id="kartu"
+            animation__pop="property: scale; from: 0.85 0.85 0.85; to: 1 1 1; dur: 300; easing: easeOutBack; startEvents: pop">
+            <a-entity
+              animation="property: position; from: 0 0 0; to: 0 0.01 0; dir: alternate; dur: 1800; easing: easeInOutSine; loop: true">
+              <a-entity id="kartuBadan" kartu-roa></a-entity>
+            </a-entity>
+          </a-entity>
         </a-entity>
-      </a-entity>
 
+      </a-entity>
     </a-entity>
   </a-scene>
 
   <script>
+    // ====== PILIH MODE ======
+    // 'datar' = kartu dipegang atau diletakkan di meja (objek berdiri dari permukaan kartu)
+    // 'tegak' = poster menempel di dinding
+    const MODE = 'datar';
+
+    // ====== TATA LETAK (satuan: 1 = lebar gambar target) ======
+    // Pada mode 'datar': x = kanan, y = naik dari permukaan kartu, z = ke arah tepi BAWAH kartu (ke arahmu)
+    const TATA = {
+      datar: { rotasi: '90 0 0', robotPos: '-0.38 0 0.2',     robotSkala: '0.2 0.2 0.2',
+               kartuPos: '0.05 1.0 -0.35', kartuSkala: 2.8 },
+      tegak: { rotasi: '0 0 0',  robotPos: '-0.26 -0.12 0',   robotSkala: '0.3 0.3 0.3',
+               kartuPos: '0.24 0 0.05',    kartuSkala: 1 }
+    };
+
     // ====== ALAMAT TOMBOL ======
     const LINK_BANTUAN = 'https://wa.me/6281145604320';
     const LINK_LAPOR   = 'https://laporperdana.sultengprov.go.id/';
@@ -273,6 +288,15 @@
         isi: 'Diberi perlakuan berbeda atau diejek hanya karena suku, agama, kondisi fisik? Perbedaan adalah keanekaragaman, bukan alasan untuk memojokkan. Setiap anak berhak belajar dalam lingkungan inklusif.' }
     ];
     // ============================================
+
+    // Terapkan tata letak sesuai mode
+    const T = TATA[MODE];
+    document.getElementById('konten').setAttribute('rotation', T.rotasi);
+    document.getElementById('robot').setAttribute('position', T.robotPos);
+    document.getElementById('robot').setAttribute('scale', T.robotSkala);
+    document.getElementById('kartuPos').setAttribute('position', T.kartuPos);
+    document.getElementById('kartuPos').setAttribute('scale',
+      T.kartuSkala + ' ' + T.kartuSkala + ' ' + T.kartuSkala);
 
     document.getElementById('btnBantuan').href = LINK_BANTUAN;
     document.getElementById('btnLapor').href   = LINK_LAPOR;
@@ -338,7 +362,7 @@
       tampilkanBantuan();
     });
 
-    // Poster terdeteksi: mulai dari awal
+    // Kartu fisik terdeteksi: mulai dari awal
     target.addEventListener('targetFound', () => {
       idx = -1;
       tampilkanKartu(0);
@@ -347,7 +371,7 @@
       audio.play().catch((e) => console.warn('Gagal memutar:', e));
     });
 
-    // Poster hilang: hentikan narasi (kartu 3D dan robot ikut hilang bersama target)
+    // Kartu fisik hilang dari kamera: hentikan narasi (objek 3D ikut hilang bersama target)
     target.addEventListener('targetLost', () => {
       audio.pause();
       audio.currentTime = 0;
