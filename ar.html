@@ -193,13 +193,15 @@
       }
     });
 
-    // ========== Komponen animasi karakter ==========
-    // Menyapa (sekali) -> Menjelaskan (berulang selama narasi) -> Diam (berulang)
+    // ========== Komponen animasi karakter (pilih klip lewat NOMOR) ==========
+    // Nomor dimulai dari 0. Nomor di glTF Viewer dimulai dari 1,
+    // jadi nomor viewer 3 = nomor di sini 2, dan seterusnya.
+    // Terkonfirmasi: viewer 3 = Menyapa, 4 = Menjelaskan, 5 = Diam.
     AFRAME.registerComponent('animasi-karakter', {
       schema: {
-        salam:  { default: 'menyapa,wave,hello,greet' },
-        bicara: { default: 'menjelaskan,talk,explain,speak' },
-        diam:   { default: 'diam,idle,breath' }
+        salam:  { type: 'int', default: 2 },
+        bicara: { type: 'int', default: 3 },
+        diam:   { type: 'int', default: 4 }
       },
       init: function () {
         this.mixer = null; this.klip = []; this.sekarang = null;
@@ -208,7 +210,17 @@
         this.el.addEventListener('model-loaded', () => {
           const model = this.el.getObject3D('mesh');
           this.klip = (model && model.animations) || [];
-          console.log('Klip animasi tersedia:', this.klip.map(k => k.name));
+          const daftar = this.klip.map((k, i) => i + ': ' + k.name);
+          console.log('Klip animasi tersedia:', daftar);
+
+          // Tambahkan ?debug di alamat untuk melihat daftar klip di layar HP
+          if (location.search.includes('debug')) {
+            const d = document.createElement('div');
+            d.style.cssText = 'position:fixed;top:70px;left:8px;right:8px;z-index:20000;background:rgba(0,0,0,0.75);color:#7CFC00;font:12px monospace;padding:8px;border-radius:8px';
+            d.textContent = 'Klip: ' + (daftar.join(' | ') || 'TIDAK ADA');
+            document.body.appendChild(d);
+          }
+
           if (!this.klip.length) return;
           this.mixer = new THREE.AnimationMixer(model);
           this.mixer.addEventListener('finished', () => {
@@ -218,14 +230,10 @@
           else this.main('diam', true);
         });
       },
-      cari: function (daftar) {
-        const kata = daftar.split(',').map(s => s.trim().toLowerCase());
-        return this.klip.find(k => kata.some(w => k.name.toLowerCase().includes(w)));
-      },
       main: function (jenis, ulang) {
         if (!this.mixer) return false;
-        const k = this.cari(this.data[jenis]);
-        if (!k) { console.warn('Klip tidak ditemukan untuk:', jenis); return false; }
+        const k = this.klip[this.data[jenis]];
+        if (!k) { console.warn('Klip nomor', this.data[jenis], 'tidak ada untuk:', jenis); return false; }
         const a = this.mixer.clipAction(k);
         a.reset();
         a.setLoop(ulang ? THREE.LoopRepeat : THREE.LoopOnce, ulang ? Infinity : 1);
@@ -312,7 +320,6 @@
     const MODE = 'tegak';
 
     // ====== TATA LETAK (satuan: 1 = lebar gambar target) ======
-    // Posisi dan skala kucing adalah PERKIRAAN, hampir pasti perlu disetel.
     const TATA = {
       tegak: { rotasi: '0 0 0',  robotPos: '-0.28 -0.3 0',   robotSkala: '0.3 0.3 0.3',
                kartuPos: '0.24 0 0.05',    kartuSkala: 1 },
