@@ -56,7 +56,7 @@
   </style>
 
   <script>
-    // Komponen kartu 3D: menggambar kartu bergaya web ROA ke canvas lalu menempelkannya sebagai tekstur
+    // ========== Komponen kartu 3D bergaya web ROA ==========
     AFRAME.registerComponent('kartu-roa', {
       init: function () {
         this.W = 800; this.H = 1170;
@@ -192,6 +192,65 @@
         this.tex.needsUpdate = true;
       }
     });
+
+    // ========== Komponen animasi karakter ==========
+    // Menyapa (sekali) -> Menjelaskan (berulang selama narasi) -> Diam (berulang)
+    AFRAME.registerComponent('animasi-karakter', {
+      schema: {
+        salam:  { default: 'menyapa,wave,hello,greet' },
+        bicara: { default: 'menjelaskan,talk,explain,speak' },
+        diam:   { default: 'diam,idle,breath' }
+      },
+      init: function () {
+        this.mixer = null; this.klip = []; this.sekarang = null;
+        this.sedangSalam = false; this.bicaraAktif = false;
+
+        this.el.addEventListener('model-loaded', () => {
+          const model = this.el.getObject3D('mesh');
+          this.klip = (model && model.animations) || [];
+          console.log('Klip animasi tersedia:', this.klip.map(k => k.name));
+          if (!this.klip.length) return;
+          this.mixer = new THREE.AnimationMixer(model);
+          this.mixer.addEventListener('finished', () => {
+            if (this.sedangSalam) { this.sedangSalam = false; this.lanjut(); }
+          });
+          if (this.bicaraAktif) this.mulaiBicara();
+          else this.main('diam', true);
+        });
+      },
+      cari: function (daftar) {
+        const kata = daftar.split(',').map(s => s.trim().toLowerCase());
+        return this.klip.find(k => kata.some(w => k.name.toLowerCase().includes(w)));
+      },
+      main: function (jenis, ulang) {
+        if (!this.mixer) return false;
+        const k = this.cari(this.data[jenis]);
+        if (!k) { console.warn('Klip tidak ditemukan untuk:', jenis); return false; }
+        const a = this.mixer.clipAction(k);
+        a.reset();
+        a.setLoop(ulang ? THREE.LoopRepeat : THREE.LoopOnce, ulang ? Infinity : 1);
+        a.clampWhenFinished = true;
+        a.play();
+        if (this.sekarang && this.sekarang !== a) a.crossFadeFrom(this.sekarang, 0.3, false);
+        this.sekarang = a;
+        return true;
+      },
+      lanjut: function () {
+        if (this.bicaraAktif) { if (!this.main('bicara', true)) this.main('diam', true); }
+        else this.main('diam', true);
+      },
+      mulaiBicara: function () {
+        this.bicaraAktif = true;
+        this.sedangSalam = this.main('salam', false);
+        if (!this.sedangSalam) this.lanjut();
+      },
+      selesai: function () {
+        this.bicaraAktif = false;
+        this.sedangSalam = false;
+        this.main('diam', true);
+      },
+      tick: function (t, dt) { if (this.mixer) this.mixer.update(dt / 1000); }
+    });
   </script>
 </head>
 <body>
@@ -228,8 +287,8 @@
 
       <a-entity id="konten">
 
-        <!-- Karakter -->
-        <a-gltf-model id="robot" src="./assets/robocat.glb"></a-gltf-model>
+        <!-- Karakter: kucing koboy beranimasi -->
+        <a-gltf-model id="robot" src="./assets/maskot.glb" animasi-karakter></a-gltf-model>
 
         <!-- Kartu info -->
         <a-entity id="kartuPos">
@@ -248,15 +307,16 @@
 
   <script>
     // ====== PILIH MODE ======
-    // 'tegak' = poster menempel di dinding (robot kiri, kartu kanan)
-    // 'datar' = kartu dipegang atau diletakkan di meja (objek berdiri dari permukaan kartu)
+    // 'tegak' = poster menempel di dinding (karakter kiri, kartu kanan)
+    // 'datar' = kartu dipegang atau diletakkan di meja
     const MODE = 'tegak';
 
     // ====== TATA LETAK (satuan: 1 = lebar gambar target) ======
+    // Posisi dan skala kucing adalah PERKIRAAN, hampir pasti perlu disetel.
     const TATA = {
-      tegak: { rotasi: '0 0 0',  robotPos: '-0.26 -0.12 0',   robotSkala: '0.3 0.3 0.3',
+      tegak: { rotasi: '0 0 0',  robotPos: '-0.28 -0.3 0',   robotSkala: '0.3 0.3 0.3',
                kartuPos: '0.24 0 0.05',    kartuSkala: 1 },
-      datar: { rotasi: '90 0 0', robotPos: '-0.38 0 0.2',     robotSkala: '0.2 0.2 0.2',
+      datar: { rotasi: '90 0 0', robotPos: '-0.38 0 0.2',    robotSkala: '0.2 0.2 0.2',
                kartuPos: '0.05 1.0 -0.35', kartuSkala: 2.8 }
     };
 
@@ -309,6 +369,10 @@
     const badan  = document.getElementById('kartuBadan');
     const aksi   = document.getElementById('aksi');
     const cepat  = document.getElementById('btnCepat');
+    const anim   = () => {
+      const r = document.getElementById('robot');
+      return r && r.components['animasi-karakter'];
+    };
     let siap = false;
     let idx = -1;
 
@@ -354,25 +418,28 @@
       tampilkanKartu(kartuUntukWaktu(audio.currentTime));
     });
 
-    // Narasi selesai: kartu terakhir + tombol bantuan (tetap tampil)
+    // Narasi selesai: kartu terakhir + tombol bantuan (tetap tampil) + kucing diam
     audio.addEventListener('ended', () => {
       tampilkanKartu(KARTU.length - 1);
       tampilkanBantuan();
+      if (anim()) anim().selesai();
     });
 
     // Poster terdeteksi: mulai dari awal
     target.addEventListener('targetFound', () => {
       idx = -1;
       tampilkanKartu(0);
+      if (anim()) anim().mulaiBicara();
       if (!siap) return;
       audio.currentTime = 0;
       audio.play().catch((e) => console.warn('Gagal memutar:', e));
     });
 
-    // Poster hilang: hentikan narasi (robot dan kartu ikut hilang bersama target)
+    // Poster hilang: hentikan narasi, kucing kembali diam
     target.addEventListener('targetLost', () => {
       audio.pause();
       audio.currentTime = 0;
+      if (anim()) anim().selesai();
     });
   </script>
 </body>
