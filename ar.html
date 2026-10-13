@@ -194,8 +194,7 @@
     });
 
     // ========== Komponen animasi karakter (pilih klip lewat NOMOR) ==========
-    // Nomor dimulai dari 0. Nomor di glTF Viewer dimulai dari 1,
-    // jadi nomor viewer 3 = nomor di sini 2, dan seterusnya.
+    // Nomor dimulai dari 0. Nomor di glTF Viewer dimulai dari 1.
     // Terkonfirmasi: viewer 3 = Menyapa, 4 = Menjelaskan, 5 = Diam.
     AFRAME.registerComponent('animasi-karakter', {
       schema: {
@@ -247,10 +246,15 @@
         if (this.bicaraAktif) { if (!this.main('bicara', true)) this.main('diam', true); }
         else this.main('diam', true);
       },
-      mulaiBicara: function () {
+      mulaiBicara: function () {          // dari awal: melambai dulu
         this.bicaraAktif = true;
         this.sedangSalam = this.main('salam', false);
         if (!this.sedangSalam) this.lanjut();
+      },
+      lanjutBicara: function () {         // melanjutkan: langsung gerakan menjelaskan
+        this.bicaraAktif = true;
+        this.sedangSalam = false;
+        if (!this.main('bicara', true)) this.main('diam', true);
       },
       selesai: function () {
         this.bicaraAktif = false;
@@ -283,7 +287,7 @@
   <audio id="narasi" src="./assets/narasi.wav" preload="auto"></audio>
 
   <a-scene
-    mindar-image="imageTargetSrc: ./assets/targets.mind;"
+    mindar-image="imageTargetSrc: ./assets/targets.mind; missTolerance: 20; warmupTolerance: 5;"
     color-space="sRGB"
     renderer="colorManagement: true, physicallyCorrectLights"
     vr-mode-ui="enabled: false"
@@ -326,6 +330,10 @@
       datar: { rotasi: '90 0 0', robotPos: '-0.38 0 0.2',    robotSkala: '0.2 0.2 0.2',
                kartuPos: '0.05 1.0 -0.35', kartuSkala: 2.8 }
     };
+
+    // ====== PENGATURAN KETAHANAN PELACAKAN ======
+    const JEDA_HILANG  = 3000;    // ms: hilang kurang dari ini diabaikan sama sekali
+    const BATAS_LANJUT = 15000;   // ms: hilang lebih lama dari ini -> narasi mulai dari awal
 
     // ====== ALAMAT TOMBOL ======
     const LINK_BANTUAN = 'https://wa.me/6281145604320';
@@ -383,6 +391,13 @@
     let siap = false;
     let idx = -1;
 
+    // Status pelacakan
+    let timerHilang = null;   // menunggu: apakah hilangnya sungguhan?
+    let hilangSejak = 0;
+    let terjeda = false;      // narasi dijeda karena target hilang
+    let mulaiPernah = false;  // narasi sudah pernah berjalan
+    let jumlahHilang = 0;
+
     function tampilkanKartu(i) {
       if (i === idx) return;
       const komp = badan.components['kartu-roa'];
@@ -432,22 +447,59 @@
       if (anim()) anim().selesai();
     });
 
-    // Poster terdeteksi: mulai dari awal
-    target.addEventListener('targetFound', () => {
+    // Mulai narasi dari awal
+    function mulaiDariAwal() {
       idx = -1;
       tampilkanKartu(0);
       if (anim()) anim().mulaiBicara();
       if (!siap) return;
       audio.currentTime = 0;
       audio.play().catch((e) => console.warn('Gagal memutar:', e));
+      mulaiPernah = true;
+    }
+
+    // Poster terdeteksi
+    target.addEventListener('targetFound', () => {
+      // Hilang sebentar lalu muncul lagi: lanjut saja tanpa mengubah apa pun
+      if (timerHilang) { clearTimeout(timerHilang); timerHilang = null; return; }
+
+      // Narasi sempat dijeda dan belum lama: lanjutkan dari posisi terakhir
+      const lama = Date.now() - hilangSejak;
+      if (terjeda && lama < BATAS_LANJUT) {
+        terjeda = false;
+        if (anim()) anim().lanjutBicara();
+        if (siap) audio.play().catch((e) => console.warn('Gagal melanjutkan:', e));
+        return;
+      }
+
+      // Selain itu: mulai dari awal
+      terjeda = false;
+      mulaiDariAwal();
     });
 
-    // Poster hilang: hentikan narasi, kucing kembali diam
+    // Poster hilang: tunggu dulu, jangan langsung menghentikan
     target.addEventListener('targetLost', () => {
-      audio.pause();
-      audio.currentTime = 0;
-      if (anim()) anim().selesai();
+      jumlahHilang++;
+      hilangSejak = Date.now();
+      if (timerHilang) clearTimeout(timerHilang);
+      timerHilang = setTimeout(() => {
+        timerHilang = null;
+        if (mulaiPernah && !audio.ended && !audio.paused) { audio.pause(); terjeda = true; }
+        if (anim()) anim().selesai();
+      }, JEDA_HILANG);
     });
+
+    // Panel debug: tambahkan ?debug di alamat
+    if (location.search.includes('debug')) {
+      const p = document.createElement('div');
+      p.style.cssText = 'position:fixed;left:8px;right:8px;bottom:80px;z-index:20000;background:rgba(0,0,0,0.75);color:#7CFC00;font:12px monospace;padding:8px;border-radius:8px';
+      document.body.appendChild(p);
+      setInterval(() => {
+        const st = timerHilang ? 'HILANG? (menunggu)' : (terjeda ? 'DIJEDA' : 'ok');
+        p.textContent = 'Target: ' + st + ' | hilang: ' + jumlahHilang + 'x | audio: ' +
+          audio.currentTime.toFixed(1) + '/' + (audio.duration || 0).toFixed(1) + ' dtk';
+      }, 300);
+    }
   </script>
 </body>
 </html>
